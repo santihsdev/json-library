@@ -9,7 +9,7 @@ reverseExample :: String
 reverseExample = "{\"favoriteColors\":[[\"hello\",[\"hello2\"]],\"yellow\",\"red\"]}"
 
 exampleObject :: String
-exampleObject = "{\"test\":{\"tercer\":[23, 44,[12, 24]]},\"next\":{\"hello\": {\"last\": \"level\"}}}"
+exampleObject = "{\"test1\":\"test\", \"object1\":{\"test2\":77, \"object2\":{\"name\":\"gabriela\",\"boolean\":true}}}"
 
 example :: JsonValue
 example =
@@ -82,7 +82,7 @@ parseObject' xs = if isOpenCharObject xs then map buildTuple (splitAcc ',' (extr
 isDigit' :: String -> Bool
 isDigit' [] = False
 isDigit' [x] = isDigit x
-isDigit' ('-' : xs) = isDigit' xs
+isDigit' ('-' : x : xs) = isDigit x && isDigit' xs
 isDigit' (x : xs) = isDigit x && isDigit' xs
 
 isOpenCharList :: String -> Bool
@@ -121,8 +121,8 @@ splitAcc' :: Char -> String -> String -> Int -> Int -> [String]
 splitAcc' _ [] [] _ _ = []
 splitAcc' _ [] ys _ _ = [reverse ys]
 splitAcc' c (x : xs) ys bracket brace
-  | x == c && x == ',' && bracket == 0 = reverse ys : splitAcc' c xs [] bracket brace
-  | x == c && x == ':' && brace == 0 = reverse ys : splitAcc' c xs [] bracket brace
+  | x == c && x == ',' && (bracket == 0 && brace == 0) = reverse ys : splitAcc' c xs [] bracket brace
+  | x == c && x == ':' && (brace == 0 && bracket == 0) = reverse ys : splitAcc' c xs [] bracket brace
   | x == '[' = splitAcc' c xs (x : ys) (bracket + 1) brace
   | x == '{' = splitAcc' c xs (x : ys) bracket (brace + 1)
   | x == ']' = splitAcc' c xs (x : ys) (bracket - 1) brace
