@@ -1,19 +1,22 @@
-module JsonBuilder (writeJson, parseJson, reverseExample) where
+module JsonBuilder (writeJson, parseJson, reverseExample, exampleObject, example) where
 
-import Data.Char (isDigit, isSpace)
-import Data.List (delete, intercalate, isPrefixOf)
+import Data.Char (isDigit)
+import Data.List (intercalate, isPrefixOf)
 import Data.Maybe (isJust)
 import JsonObject (JsonValue (..))
 
 reverseExample :: String
 reverseExample = "{\"favoriteColors\":[[\"hello\",[\"hello2\"]],\"yellow\",\"red\"]}"
 
+exampleObject :: String
+exampleObject = "{\"test\":{\"tercer\":[23, 44,[12, 24]]},\"next\":{\"hello\": {\"last\": \"level\"}}}"
+
 example :: JsonValue
 example =
   JObject
-    [ ("name", Just (JString "Desiree")),
-      ("age", Just (JNumber 19.9)),
-      ("activities", Just (JList [Just (JString "sleep"), Just (JString "eat"), Just (JString "study")]))
+    [ ("name", Just (JString "Test Desi")),
+      ("age", Just (JNumber 20)),
+      ("fruits", Just (JList [Just (JString "orange"), Just (JString "luttuce"), Just (JString "study")]))
     ]
 
 writeJson :: Maybe JsonValue -> String
@@ -35,7 +38,7 @@ containsList xs _ = isPrefixOf "[" xs && isPrefixOf "]" xs
 
 parseJson :: String -> Maybe JsonValue
 parseJson [] = Nothing
-parseJson s = Just (JObject (map buildTuple (splitAcc' ',' (extractObject (Just s) '{' '}') [] 0)))
+parseJson s = Just (JObject (map buildTuple (splitAcc ',' (extractObject' (Just (trim s))) [])))
 
 extractObject :: Maybe String -> Char -> Char -> Maybe String
 extractObject Nothing _ _ = Nothing
@@ -62,11 +65,19 @@ parseNumber n = if isDigit' n then Just (JNumber (read n)) else Nothing
 
 parseList :: String -> Maybe JsonValue
 parseList [] = Nothing
-parseList xs = Just (JList (parseList' xs))
+parseList xs = if isOpenCharList xs then Just (JList (parseList' xs)) else parseObject xs
 
 parseList' :: String -> [Maybe JsonValue]
 parseList' [] = [Just JNil]
-parseList' xs = if isOpenCharList xs then map getJValue (splitAcc' ',' (extractObject' (Just xs)) [] 0) else [Nothing]
+parseList' xs = map getJValue (splitAcc ',' (extractObject' (Just xs)) [])
+
+parseObject :: String -> Maybe JsonValue
+parseObject [] = Nothing
+parseObject xs = Just (JObject (parseObject' xs))
+
+parseObject' :: String -> [(String, Maybe JsonValue)]
+parseObject' [] = [("", Just JNil)]
+parseObject' xs = if isOpenCharObject xs then map buildTuple (splitAcc ',' (extractObject' (Just xs)) []) else [("", Nothing)]
 
 isDigit' :: String -> Bool
 isDigit' [] = False
@@ -86,7 +97,7 @@ splitToTuples :: String -> [(String, Maybe JsonValue)]
 splitToTuples s = map buildTuple (splitAcc ',' (Just s) [])
 
 trim :: String -> String
-trim = dropWhile isSpace
+trim = filter (`notElem` " ")
 
 buildTuple :: String -> (String, Maybe JsonValue)
 buildTuple [] = ("", Just (JString ""))
@@ -98,34 +109,28 @@ getJValue xs
   | Data.Maybe.isJust (parseNumber xs) = parseNumber xs
   | Data.Maybe.isJust (parseString xs) = parseString xs
   | Data.Maybe.isJust (parseList xs) = parseList xs
+  | Data.Maybe.isJust (parseObject xs) = parseObject xs
   | otherwise = Nothing
 
 splitAcc :: Char -> Maybe String -> String -> [String]
 splitAcc _ Nothing [] = []
-splitAcc _ (Just []) [] = []
-splitAcc _ (Just []) ys = [reverse ys]
-splitAcc c (Just (x : xs)) ys
-  | x == c = reverse ys : splitAcc c (Just xs) []
-  | otherwise = splitAcc c (Just xs) (x : ys)
+splitAcc _ Nothing (_ : _) = []
+splitAcc c (Just xs) ys = splitAcc' c xs ys 0 0
 
-splitAcc' :: Char -> Maybe String -> String -> Int -> [String]
-splitAcc' _ Nothing [] _ = []
-splitAcc' _ (Just []) [] _ = []
-splitAcc' _ (Just []) ys _ = [reverse ys]
-splitAcc' c (Just (x : xs)) ys b
-  | x == c && b == 0 = reverse ys : splitAcc' c (Just xs) [] b
-  | x == '[' = splitAcc' c (Just xs) (x : ys) (b + 1)
-  | x == ']' = splitAcc' c (Just xs) (x : ys) (b - 1)
-  | otherwise = splitAcc' c (Just xs) (x : ys) b
-
-example' :: String
-example' = "{\"a\":10,\"isTrue\":true,\"name\":\"John\"}"
+splitAcc' :: Char -> String -> String -> Int -> Int -> [String]
+splitAcc' _ [] [] _ _ = []
+splitAcc' _ [] ys _ _ = [reverse ys]
+splitAcc' c (x : xs) ys bracket brace
+  | x == c && x == ',' && bracket == 0 = reverse ys : splitAcc' c xs [] bracket brace
+  | x == c && x == ':' && brace == 0 = reverse ys : splitAcc' c xs [] bracket brace
+  | x == '[' = splitAcc' c xs (x : ys) (bracket + 1) brace
+  | x == '{' = splitAcc' c xs (x : ys) bracket (brace + 1)
+  | x == ']' = splitAcc' c xs (x : ys) (bracket - 1) brace
+  | x == '}' = splitAcc' c xs (x : ys) bracket (brace - 1)
+  | otherwise = splitAcc' c xs (x : ys) bracket brace
 
 extractNodes :: String -> [(String, String)]
 extractNodes xs = map parseKeyValuePairs (splitAcc ',' (Just xs) [])
 
 parseKeyValuePairs :: String -> (String, String)
 parseKeyValuePairs s = let x : y : _ = splitAcc ':' (Just s) [] in (x, y)
-
-listString :: [String]
-listString = ["\"favoriteColors\":[\"orange\"", "\"yellow\"", "\"red\"]"]

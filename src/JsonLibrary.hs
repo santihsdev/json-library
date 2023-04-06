@@ -3,10 +3,8 @@ module JsonLibrary
   )
 where
 
-import JsonBuilder (parseJson, reverseExample, writeJson)
+import JsonBuilder (parseJson, reverseExample, exampleObject, writeJson, example)
 import JsonObject (JsonValue (JList, JObject, JString))
-
--- jsonValue = JObject [("name", JString "John"), ("lastName", JString "Doe")]
 
 jsonValue' :: JsonValue
 jsonValue' =
@@ -16,11 +14,8 @@ jsonValue' =
       ("lastName", Just (JString "Doe"))
     ]
 
-stringValue :: String
-stringValue = "{\"name\": \"test\", \"last\": \"test\"}"
-
--- jsonValue' = JObject [("daysOfWeek", Just (JList [Just (JString "M"), Just (JString "T"), Just (JString "T")])), ("name", Just (JString "John")), ("lastName", Just (JString "Doe"))]
-
 toJsonString :: IO ()
--- toJsonString = putStrLn (writeJson (Just jsonValue'))
-toJsonString = print (parseJson reverseExample)
+toJsonString = do
+  print (parseJson reverseExample)
+  print (parseJson exampleObject)
+  putStrLn (writeJson (Just example))
