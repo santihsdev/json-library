@@ -1,7 +1,8 @@
 module JsonFuntor where
 
 -- import Control.Applicative (Alternative (empty, (<|>)), Applicative (pure, (<*>)))
-import Data.Char (isDigit, toUpper)
+import Data.Char (isDigit, isSpace, toUpper)
+import Data.List
 import JsonObject (JsonValue (..))
 
 data Parser a = Parser {parse :: String -> Maybe (a, String)}
@@ -57,19 +58,60 @@ divNumber (x : xs)
   | isDigit x = divNumber' (x : xs)
   | otherwise = divNumber (xs)
 
-parseDouble :: Parser JsonValue
-parseDouble = Parser divNumber
+parseNumber :: Parser JsonValue
+parseNumber = Parser divNumber
 
 exampleBool :: Maybe (JsonValue, String)
 exampleBool = parse parseBool "true hello"
 
-exampleAppFunc =
-  pure
-    (\(JString xn, _) -> [toUpper x | x <- xn])
-    <*> (parse parseString "\"hello \"world")
+trim :: String -> String
+trim = filter (not . isSpace)
 
-exampleAppFunc2 =
-  pure (\(JBool a, _) (JBool b, _) (JBool c, _) -> (a && b || c, ""))
-    <*> exampleBool
-    <*> parse parseBool "false world"
-    <*> parse parseBool "false hello"
+removePairs :: String -> Maybe String
+removePairs [] = Nothing
+removePairs (_ : xs) = Just (init xs)
+
+splitAcc :: Char -> Maybe String -> [String]
+splitAcc _ Nothing = []
+splitAcc c (Just xs) = splitAcc' c xs [] 0 0
+
+splitAcc' :: Char -> String -> String -> Int -> Int -> [String]
+splitAcc' _ [] [] _ _ = []
+splitAcc' _ [] ys _ _ = [reverse ys]
+splitAcc' c (x : xs) ys bracket brace
+  | x == c && x == ',' && (bracket == 0 && brace == 0) = reverse ys : splitAcc' c xs [] bracket brace
+  | x == c && x == ':' && (brace == 0 && bracket == 0) = reverse ys : splitAcc' c xs [] bracket brace
+  | x == '[' = splitAcc' c xs (x : ys) (bracket + 1) brace
+  | x == '{' = splitAcc' c xs (x : ys) bracket (brace + 1)
+  | x == ']' = splitAcc' c xs (x : ys) (bracket - 1) brace
+  | x == '}' = splitAcc' c xs (x : ys) bracket (brace - 1)
+  | otherwise = splitAcc' c xs (x : ys) bracket brace
+
+parseParser :: String -> Parser JsonValue -> Maybe JsonValue
+parseParser xs p =
+  let pos = parse p xs
+   in case pos of
+        Nothing -> Nothing
+        Just (res, _) -> Just res
+
+parseTo :: String -> Maybe JsonValue
+parseTo [] = Nothing
+parseTo xs
+  | isInfixOf "\"" xs = parseParser xs parseString
+  | all isDigit xs = parseParser xs parseNumber
+  | isInfixOf "{" xs = parseParser xs parseJson
+  | otherwise = parseParser xs parseBool
+
+createKeyValue :: String -> (String, Maybe JsonValue)
+createKeyValue xs = let (x, y) = break (== ':') xs in (x, parseTo (tail y))
+
+divJson :: String -> Maybe (JsonValue, String)
+divJson [] = Nothing
+-- divJson xs = Just ("", JsonObject [("", JBool True)])
+divJson xs = Just (JObject (map createKeyValue (splitAcc ',' (removePairs (trim xs)))), "")
+
+parseJson :: Parser JsonValue
+parseJson = Parser divJson
+
+exampleJson :: String
+exampleJson = "{ \"squadName\": \"Super hero squad\", \"homeTown\": \"Metro City\", \"formed\": 2016, \"secretBase\": \"Super tower\",\"active\": true, hello: {level: 123}}"
