@@ -1,10 +1,12 @@
-module JsonObject(JsonValue(..),NodeName) where
+module JsonObject (JsonValue (..), NodeName) where
 
 type NodeName = String
-data JsonValue = JString String 
-            | JBool Bool 
-            | JObject [(String, Maybe JsonValue)]
-            | JNumber Double 
-            | JList [Maybe JsonValue]
-            | JNil
-            deriving Show
+
+data JsonValue
+  = JString String
+  | JBool Bool
+  | JObject [(String, Maybe JsonValue)]
+  | JNumber Double
+  | JList [JsonValue]
+  | JNil
+  deriving (Show)

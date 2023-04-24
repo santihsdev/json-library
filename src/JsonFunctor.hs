@@ -1,6 +1,8 @@
 module JsonFuntor where
 
 -- import Control.Applicative (Alternative (empty, (<|>)), Applicative (pure, (<*>)))
+
+import Control.Applicative (Alternative (empty, (<|>)))
 import Data.Char (isDigit, isSpace)
 import Data.List (isInfixOf)
 import Data.Maybe (fromJust)
@@ -21,6 +23,10 @@ instance Applicative Parser where
           (b', res) <- b x
           Just (f' b', res)
       )
+
+instance Alternative Parser where
+  empty = Parser (\_ -> Nothing)
+  (<|>) (Parser f) (Parser b) = Parser (\x -> f x <|> b x)
 
 parseBool :: Parser JsonValue
 parseBool =
@@ -115,9 +121,15 @@ divJson xs = Just (JObject (map createKeyValue (splitAcc ',' (removePairs (trim 
 parseJson :: Parser JsonValue
 parseJson = Parser divJson
 
+extractJust :: [Maybe JsonValue] -> [JsonValue]
+extractJust [] = []
+extractJust (x : xs) = case x of
+  Nothing -> extractJust xs
+  (Just s) -> s : extractJust xs
+
 divArray :: String -> Maybe (JsonValue, String)
 divArray [] = Nothing
-divArray xs = Just (JList (map parseTo (splitAcc ',' (removePairs xs))), "")
+divArray xs = Just (JList (extractJust (map parseTo (splitAcc ',' (removePairs xs)))), "")
 
 parseArray :: Parser JsonValue
 parseArray = Parser divArray
@@ -125,11 +137,15 @@ parseArray = Parser divArray
 exampleJson :: String
 exampleJson = "{ \"squadName\": \"Super hero squad\", \"homeTown\": \"Metro City\", \"formed\": 2016, \"secretBase\": \"Super tower\",\"active\": true, hello: {level: 123}, array: [{hello: [123]}, \"world\", 123]}"
 
+getJLine :: String -> JsonValue
+getJLine xs = fst (fromJust (parse (parseString <|> parseBool <|> parseArray <|> parseNumber <|> parseJson) xs))
+
 modify :: JsonValue -> JsonValue
 modify (JObject s) = JObject [(x, Just (modify (fromJust y))) | (x, y) <- s]
 modify (JNumber n) = JNumber (n + 10)
 modify (JString s) = JString (s ++ "hello")
 modify (JBool b) = JBool (not b)
-modify el = el
+modify (JList l) = JList (fmap modify l)
+modify d = d
 
 appTest = pure (\(j, _) -> modify j) <*> (parse parseJson exampleJson)
