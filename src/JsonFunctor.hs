@@ -53,17 +53,15 @@ divString xn = divString' xn [] 0
 parseString :: Parser JsonValue
 parseString = Parser divString
 
-divNumber' :: String -> Maybe (JsonValue, String)
-divNumber' [] = Nothing
-divNumber' xn =
-  let (num, str) = span isDigit xn
-   in Just (JNumber (read num), str)
-
 divNumber :: String -> Maybe (JsonValue, String)
 divNumber [] = Nothing
-divNumber (x : xs)
-  | isDigit x = divNumber' (x : xs)
-  | otherwise = divNumber (xs)
+divNumber xn@(x : xs)
+  | x == '-' =
+      let (num, str) = span isDigit xs
+       in Just (JNumber (-1 * (read num)), str)
+  | otherwise =
+      let (num, str) = span isDigit xn
+       in Just (JNumber (read num), str)
 
 parseNumber :: Parser JsonValue
 parseNumber = Parser divNumber
@@ -76,7 +74,9 @@ trim = filter (not . isSpace)
 
 removePairs :: String -> Maybe String
 removePairs [] = Nothing
-removePairs (_ : xs) = Just (init xs)
+removePairs (x : xs)
+  | (x == '{' && last xs == '}') || (x == '[' && last xs == ']') = Just (init xs)
+  | otherwise = Nothing
 
 splitAcc :: Char -> Maybe String -> [String]
 splitAcc _ Nothing = []
@@ -103,11 +103,11 @@ parseParser xs p =
 
 parseTo :: String -> Maybe JsonValue
 parseTo [] = Nothing
-parseTo xs@(x : _)
+parseTo xs@(x : xn)
   | x == '[' = parseParser xs parseArray
   | x == '{' = parseParser xs parseJson
   | isInfixOf "\"" xs = parseParser xs parseString
-  | all isDigit xs = parseParser xs parseNumber
+  | all isDigit xn = parseParser xs parseNumber
   | otherwise = parseParser xs parseBool
 
 createKeyValue :: String -> (String, Maybe JsonValue)
@@ -135,7 +135,7 @@ parseArray :: Parser JsonValue
 parseArray = Parser divArray
 
 exampleJson :: String
-exampleJson = "{ \"squadName\": \"Super hero squad\", \"homeTown\": \"Metro City\", \"formed\": 2016, \"secretBase\": \"Super tower\",\"active\": true, hello: {level: 123}, array: [{hello: [123]}, \"world\", 123]}"
+exampleJson = "{ \"squadName\": \"Super hero squad\", \"homeTown\": \"Metro City\", \"formed\": 2016, \"secretBase\": \"Super tower\",\"active\": true, hello: {level: -123}, array: [{hello: [123]}, \"world\", 123]}"
 
 getJLine :: String -> JsonValue
 getJLine xs = fst (fromJust (parse (parseString <|> parseBool <|> parseArray <|> parseNumber <|> parseJson) xs))
