@@ -2,6 +2,12 @@ module JsonFunctor
   ( getJLine,
     exampleJson,
     exampleJson2,
+    parse,
+    parseBool,
+    parseString,
+    parseNumber,
+    parseArray,
+    parseJson
   )
 where
 
