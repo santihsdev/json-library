@@ -1,4 +1,9 @@
-module JsonFuntor where
+module JsonFunctor
+  ( getJLine,
+    exampleJson,
+    exampleJson2,
+  )
+where
 
 -- import Control.Applicative (Alternative (empty, (<|>)), Applicative (pure, (<*>)))
 
@@ -48,6 +53,8 @@ divString' (x : xs) res counter
   | otherwise = divString' xs res counter
 
 divString :: String -> Maybe (JsonValue, String)
+divString (x : _)
+  | x == '[' || x == '{' = Nothing
 divString xn = divString' xn [] 0
 
 parseString :: Parser JsonValue
@@ -55,27 +62,27 @@ parseString = Parser divString
 
 divNumber :: String -> Maybe (JsonValue, String)
 divNumber [] = Nothing
+divNumber (x : _)
+  | x == '[' || x == '{' = Nothing
 divNumber xn@(x : xs)
-  | x == '-' =
+  | all isDigit xs && x == '-' =
       let (num, str) = span isDigit xs
-       in Just (JNumber (-1 * (read num)), str)
-  | otherwise =
+       in Just (JNumber (-1 * read num), str)
+  | all isDigit xn =
       let (num, str) = span isDigit xn
        in Just (JNumber (read num), str)
+  | otherwise = Nothing
 
 parseNumber :: Parser JsonValue
 parseNumber = Parser divNumber
 
-exampleBool :: Maybe (JsonValue, String)
-exampleBool = parse parseBool "true hello"
-
 trim :: String -> String
 trim = filter (not . isSpace)
 
-removePairs :: String -> Maybe String
-removePairs [] = Nothing
-removePairs (x : xs)
-  | (x == '{' && last xs == '}') || (x == '[' && last xs == ']') = Just (init xs)
+removePairs :: String -> Char -> Char -> Maybe String
+removePairs [] _ _ = Nothing
+removePairs (x : xs) b e
+  | x == b && last xs == e = Just (init xs)
   | otherwise = Nothing
 
 splitAcc :: Char -> Maybe String -> [String]
@@ -106,7 +113,7 @@ parseTo [] = Nothing
 parseTo xs@(x : xn)
   | x == '[' = parseParser xs parseArray
   | x == '{' = parseParser xs parseJson
-  | isInfixOf "\"" xs = parseParser xs parseString
+  | "\"" `isInfixOf` xs = parseParser xs parseString
   | all isDigit xn = parseParser xs parseNumber
   | otherwise = parseParser xs parseBool
 
@@ -115,8 +122,10 @@ createKeyValue xs = let (x, y) = break (== ':') xs in (x, parseTo (tail y))
 
 divJson :: String -> Maybe (JsonValue, String)
 divJson [] = Nothing
+divJson (x : xs)
+  | x == '[' || last xs == ']' = Nothing
 -- divJson xs = Just ("", JsonObject [("", JBool True)])
-divJson xs = Just (JObject (map createKeyValue (splitAcc ',' (removePairs (trim xs)))), "")
+divJson xs = Just (JObject (map createKeyValue (splitAcc ',' (removePairs (trim xs) '{' '}'))), "")
 
 parseJson :: Parser JsonValue
 parseJson = Parser divJson
@@ -129,16 +138,29 @@ extractJust (x : xs) = case x of
 
 divArray :: String -> Maybe (JsonValue, String)
 divArray [] = Nothing
-divArray xs = Just (JList (extractJust (map parseTo (splitAcc ',' (removePairs xs)))), "")
+divArray (x : xs)
+  | x /= '[' || last xs /= ']' = error "List not valid"
+divArray xs = Just (JList (extractJust (map parseTo (splitAcc ',' (removePairs (trim xs) '[' ']')))), "")
 
 parseArray :: Parser JsonValue
 parseArray = Parser divArray
 
+parseNil :: Parser JsonValue
+parseNil =
+  Parser
+    ( \x -> case x of
+        "" -> Just (JNil, "")
+        _ -> Nothing
+    )
+
 exampleJson :: String
 exampleJson = "{ \"squadName\": \"Super hero squad\", \"homeTown\": \"Metro City\", \"formed\": 2016, \"secretBase\": \"Super tower\",\"active\": true, hello: {level: -123}, array: [{hello: [123]}, \"world\", 123]}"
 
+exampleJson2 :: String
+exampleJson2 = "{\"squadName\": \"Super hero squad\",\"homeTown\": \"Metro City\",\"formed\": 2016,\"secretBase\": \"Super tower\",\"active\": true, \"members\": [   {     \"name\": \"Molecule Man\",     \"age\": 29,     \"secretIdentity\": \"Dan Jukes\",     \"powers\": [\"Radiation resistance\", \"Turning tiny\", \"Radiation blast\"]   },   {     \"name\": \"Madame Uppercut\",     \"age\": 39,     \"secretIdentity\": \"Jane Wilson\",     \"powers\": [       \"Million tonne punch\",       \"Damage resistance\",       \"Superhuman reflexes\"     ]   },   {     \"name\": \"Eternal Flame\",     \"age\": 1000000,     \"secretIdentity\": \"Unknown\",     \"powers\": [       \"Immortality\",       \"Heat Immunity\",       \"Inferno\",       \"Teleportation\",       \"Interdimensional travel\"]}]}"
+
 getJLine :: String -> JsonValue
-getJLine xs = fst (fromJust (parse (parseString <|> parseBool <|> parseArray <|> parseNumber <|> parseJson) xs))
+getJLine xs = fst (fromJust (parse (parseString <|> parseBool <|> parseNumber <|> parseJson <|> parseArray <|> parseNil) xs))
 
 modify :: JsonValue -> JsonValue
 modify (JObject s) = JObject [(x, Just (modify (fromJust y))) | (x, y) <- s]
@@ -148,4 +170,5 @@ modify (JBool b) = JBool (not b)
 modify (JList l) = JList (fmap modify l)
 modify d = d
 
-appTest = pure (\(j, _) -> modify j) <*> (parse parseJson exampleJson)
+appTest :: Maybe JsonValue
+appTest = (\(j, _) -> modify j) <$> parse parseJson exampleJson
