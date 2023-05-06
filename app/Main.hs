@@ -1,6 +1,6 @@
 module Main (main) where
 
-import JsonLibrary
+import JsonLibrary ( toJsonString )
 
 main :: IO ()
 main = toJsonString
